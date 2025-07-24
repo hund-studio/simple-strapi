@@ -1,0 +1,53 @@
+{
+  "name": "simple-strapi",
+  "version": "1.0.0-alpha.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "readme": "docs/NPM.md",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hund-studio/simple-strapi.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hund-studio/simple-strapi/issues"
+  },
+  "homepage": "https://github.com/hund-studio/simple-strapi#readme",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "publish:prerelease": "tsx scripts/publish.ts prerelease alpha",
+    "publish:prepatch": "tsx scripts/publish.ts prepatch alpha",
+    "publish:patch": "tsx scripts/publish.ts patch",
+    "publish:preminor": "tsx scripts/publish.ts preminor alpha",
+    "publish:minor": "tsx scripts/publish.ts minor",
+    "publish:premajor": "tsx scripts/publish.ts premajor alpha",
+    "publish:major": "tsx scripts/publish.ts major",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "node-fetch": "^3.3.2",
+    "qs": "^6.14.0",
+    "simple-exception": "file:../simple-exception",
+    "zod": "^4.0.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.14",
+    "@types/qs": "^6.14.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.0.0"
+  }
+}
