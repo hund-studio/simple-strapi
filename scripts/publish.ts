@@ -2,6 +2,11 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const PACKAGE_JSON_PATH = resolve(process.cwd(), "package.json");
 
