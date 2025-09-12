@@ -42,9 +42,27 @@ const paragraphBlock = z.object({
   children: z.array(paragraphChild),
 });
 
-export const zodRichTextBlocksSchema = z.array(z.union([paragraphBlock]));
+const headingBlock = z.object({
+  type: z.literal("heading"),
+  level: z.number(),
+  children: z.array(paragraphChild),
+});
+
+const listItemBlock = z.object({
+  type: z.literal("list-item"),
+  children: z.array(paragraphChild),
+});
+
+const listBlock = z.object({
+  type: z.literal("list"),
+  format: z.enum(["ordered", "unordered"]),
+  children: z.array(listItemBlock),
+});
+
+export const zodRichTextBlocksSchema = z.array(z.union([paragraphBlock, headingBlock, listBlock]));
 
 type ZodRichTextBlocksType = z.output<typeof zodRichTextBlocksSchema>;
+export type RichTextBlocks = ZodRichTextBlocksType; // Public export
 
 export type RichTextBlocksOptions = {
   // nullable?: boolean;

@@ -4,8 +4,11 @@ import { InferText, TextField, TextOptions } from "./fields/text";
 import { join } from "path";
 import {
   InferRelationHasMany,
+  InferRelationHasOne,
   RelationHasManyField,
   RelationHasManyOptions,
+  RelationHasOneField,
+  RelationHasOneOptions,
 } from "./fields/relation";
 import fetch from "node-fetch";
 import qs from "qs";
@@ -31,6 +34,7 @@ export type SchemaField =
   | TextField
   | NumberField
   | RelationHasManyField
+  | RelationHasOneField
   | DynamicField
   | ComponentSingleField
   | ComponentRepeatableField
@@ -51,6 +55,12 @@ export type InferSchema<S extends Schema> = {
         infer O extends RelationHasManyOptions
       ]
     ? InferRelationHasMany<R, O>
+    : S[K] extends [
+        "relation.hasOne",
+        infer R extends Schema,
+        infer O extends RelationHasOneOptions
+      ]
+    ? InferRelationHasOne<R, O>
     : S[K] extends [
         "component.single",
         infer R extends Schema,
@@ -197,6 +207,10 @@ class Client {
       return this.populateFromSchema(shape);
     };
 
+    const populateHasOneRelation = ([, shape]: RelationHasOneField) => {
+      return this.populateFromSchema(shape);
+    };
+
     const populateComponentSingle = ([, shape]: ComponentSingleField) => {
       return this.populateFromSchema(shape);
     };
@@ -222,6 +236,10 @@ class Client {
       switch (field[0]) {
         case "relation.hasMany":
           populate[key] = { populate: populateHasManyRelation(field) };
+          if (!Object.keys(populate[key].populate)["length"]) populate[key] = true;
+          break;
+        case "relation.hasOne":
+          populate[key] = { populate: populateHasOneRelation(field) };
           if (!Object.keys(populate[key].populate)["length"]) populate[key] = true;
           break;
         case "component.single":
@@ -308,10 +326,9 @@ class Client {
         });
       }
 
-      const {
-        data: [data],
-        meta,
-      } = z.object({ data: z.array(z.any()), meta: z.any() }).parse(await response.json());
+      const { data, meta } = z
+        .object({ data: z.any(), meta: z.any() })
+        .parse(await response.json());
 
       if (!data) throw createSimpleException({ code: 404, type: "error", message: "Not found" });
 
@@ -434,7 +451,7 @@ class Client {
             if (result.success) {
               parsedData.push(result.data);
             } else {
-              console.warn("⚠️ Collection parsing error on entry");
+              console.warn("⚠️ Collection parsing error on entry", entry);
               console.error("🚨 Error", result.error);
             }
           }
