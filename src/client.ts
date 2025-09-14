@@ -14,7 +14,7 @@ import fetch from "node-fetch";
 import qs from "qs";
 import z from "zod";
 import { DynamicField, DynamicOptions, InferDynamic } from "./fields/dynamic";
-import { schemaToParser } from "./utils/schema";
+import { defaultStrapiFields, defaultStrapiFieldsSchema, schemaToParser } from "./utils/schema";
 import {
   ComponentRepeatableField,
   ComponentRepeatableOptions,
@@ -91,6 +91,9 @@ export type InferSchema<S extends Schema> = {
     ? InferRichTextBlocks<O>
     : never;
 };
+
+export type InferSchemaWithDefaults<S extends Schema> = InferSchema<S> &
+  z.output<typeof defaultStrapiFieldsSchema>;
 
 class Client {
   // #region STATIC
@@ -269,7 +272,7 @@ class Client {
       schema: S;
       populate?: any;
     }>
-  ): Promise<{ data: InferSchema<S>; meta: any }>;
+  ): Promise<{ data: InferSchemaWithDefaults<S>; meta: any }>;
   public async getSingle(
     pluralID: string,
     options: EntityRequest<{
@@ -286,7 +289,7 @@ class Client {
       schema?: S;
       populate?: any;
     }> = {}
-  ): Promise<{ data: S extends Schema ? InferSchema<S> : any; meta: any }> {
+  ): Promise<{ data: S extends Schema ? InferSchemaWithDefaults<S> : any; meta: any }> {
     try {
       if ("schema" in options) {
         const { schema } = options;
@@ -335,7 +338,7 @@ class Client {
       if ("schema" in options) {
         const { schema: shape } = options;
         if (shape) {
-          const schema = z.object(schemaToParser(shape)).loose();
+          const schema = z.object(schemaToParser(shape)).extend(defaultStrapiFields).loose();
           const result = schema.safeParse(data);
           if (!result.success) {
             console.warn("⚠️ Single entity parsing error");
@@ -360,7 +363,7 @@ class Client {
       pagination?: false | { page?: number; pageSize?: number };
       populate?: any;
     }>
-  ): Promise<{ data: InferSchema<S>[]; meta: any }>;
+  ): Promise<{ data: InferSchemaWithDefaults<S>[]; meta: any }>;
   public async getCollection(
     pluralID: string,
     options: EntityRequest<{
@@ -380,7 +383,7 @@ class Client {
       pagination?: false | { page?: number; pageSize?: number };
       populate?: any;
     }> = {}
-  ): Promise<{ data: S extends Schema ? InferSchema<S>[] : any[]; meta: any }> {
+  ): Promise<{ data: S extends Schema ? InferSchemaWithDefaults<S>[] : any[]; meta: any }> {
     try {
       if ("schema" in options) {
         const { schema } = options;
@@ -444,7 +447,7 @@ class Client {
       if ("schema" in options) {
         const { schema: shape } = options;
         if (shape) {
-          const schema = z.object(schemaToParser(shape)).loose();
+          const schema = z.object(schemaToParser(shape)).extend(defaultStrapiFields).loose();
           const parsedData: any[] = [];
           for (const entry of data) {
             const result = schema.safeParse(entry);

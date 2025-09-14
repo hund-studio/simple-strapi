@@ -1,5 +1,5 @@
 import z, { ZodType } from "zod";
-import { InferSchema, Schema } from "../client";
+import { InferSchema, InferSchemaWithDefaults, Schema } from "../client";
 import { schemaToParser } from "../utils/schema";
 
 /**
@@ -17,16 +17,18 @@ export type ComponentSingleOptions = {
 //   O extends ComponentSingleOptions
 // > = O["nullable"] extends true
 //   ? O["optional"] extends true
-//     ? InferSchema<S> | null | undefined
-//     : InferSchema<S> | null
+//     ? InferSchemaWithDefaults<S> | null | undefined
+//     : InferSchemaWithDefaults<S> | null
 //   : O["optional"] extends true
-//   ? InferSchema<S> | undefined
-//   : InferSchema<S>;
+//   ? InferSchemaWithDefaults<S> | undefined
+//   : InferSchemaWithDefaults<S>;
 
 export type InferComponentSingle<
   S extends Schema,
   O extends ComponentSingleOptions
-> = O["required"] extends true ? InferSchema<S> : InferSchema<S> | null | undefined;
+> = O["required"] extends true
+  ? InferSchemaWithDefaults<S>
+  : InferSchemaWithDefaults<S> | null | undefined;
 
 const single = <S = any, O extends ComponentSingleOptions = {}>(
   shape: S,
@@ -60,16 +62,18 @@ export type ComponentRepeatableOptions = {
 //   O extends ComponentRepeatableOptions
 // > = O["nullable"] extends true
 //   ? O["optional"] extends true
-//     ? InferSchema<S>[] | null | undefined
-//     : InferSchema<S>[] | null
+//     ? InferSchemaWithDefaults<S>[] | null | undefined
+//     : InferSchemaWithDefaults<S>[] | null
 //   : O["optional"] extends true
-//   ? InferSchema<S>[] | undefined
-//   : InferSchema<S>[];
+//   ? InferSchemaWithDefaults<S>[] | undefined
+//   : InferSchemaWithDefaults<S>[];
 
 export type InferComponentRepeatable<
   S extends Schema,
   O extends ComponentRepeatableOptions
-> = O["required"] extends true ? InferSchema<S>[] : InferSchema<S>[] | null | undefined;
+> = O["required"] extends true
+  ? InferSchemaWithDefaults<S>[]
+  : InferSchemaWithDefaults<S>[] | null | undefined;
 
 const repeatable = <S = any, O extends ComponentRepeatableOptions = {}>(
   shape: S,

@@ -8,6 +8,16 @@ import z, { ZodType } from "zod";
 import { enumerationSchema } from "../fields/enumeration";
 import { richTextBlocksSchema } from "../fields/richText";
 
+export const defaultStrapiFields = {
+  id: z.number(),
+  documentId: z.string().optional(),
+  createdAt: z.iso.datetime().optional(),
+  updatedAt: z.iso.datetime().optional(),
+  publishedAt: z.iso.datetime().nullable().optional(),
+};
+
+export const defaultStrapiFieldsSchema = z.object(defaultStrapiFields);
+
 export const schemaToParser = (schema: Schema) => {
   const shape: Record<string, ZodType> = {};
 

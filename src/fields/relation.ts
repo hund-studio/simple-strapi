@@ -1,4 +1,4 @@
-import { InferSchema, Schema } from "../client";
+import { InferSchema, InferSchemaWithDefaults, Schema } from "../client";
 
 /**
  * HAS MANY
@@ -14,11 +14,11 @@ export type InferRelationHasMany<
   O extends RelationHasManyOptions
 > = O["nullable"] extends true
   ? O["optional"] extends true
-    ? InferSchema<S>[] | null | undefined
-    : InferSchema<S>[] | null
+    ? InferSchemaWithDefaults<S>[] | null | undefined
+    : InferSchemaWithDefaults<S>[] | null
   : O["optional"] extends true
-  ? InferSchema<S>[] | undefined
-  : InferSchema<S>[];
+  ? InferSchemaWithDefaults<S>[] | undefined
+  : InferSchemaWithDefaults<S>[];
 
 const hasMany = <S = any, O extends RelationHasManyOptions = {}>(
   shape: S,
@@ -43,11 +43,11 @@ export type InferRelationHasOne<
   O extends RelationHasOneOptions
 > = O["nullable"] extends true
   ? O["optional"] extends true
-    ? InferSchema<S> | null | undefined
-    : InferSchema<S> | null
+    ? InferSchemaWithDefaults<S> | null | undefined
+    : InferSchemaWithDefaults<S> | null
   : O["optional"] extends true
-  ? InferSchema<S> | undefined
-  : InferSchema<S>;
+  ? InferSchemaWithDefaults<S> | undefined
+  : InferSchemaWithDefaults<S>;
 
 const hasOne = <S = any, O extends RelationHasOneOptions = {}>(
   shape: S,
