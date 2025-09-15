@@ -28,7 +28,11 @@ import { EnumerationField, EnumerationOptions, InferEnumeration } from "./fields
 import { InferRichTextBlocks, RichTextBlocksField, RichTextBlocksOptions } from "./fields/richText";
 
 type RequestParams = Record<string, any>;
-type EntityRequest<P = {}> = { params?: RequestParams; headers?: Record<string, string> } & P;
+type EntityRequest<P = {}> = {
+  where?: Record<string, string>;
+  params?: RequestParams;
+  headers?: Record<string, string>;
+} & P;
 
 export type SchemaField =
   | TextField
@@ -406,7 +410,11 @@ class Client {
 
         const requestURL = Client.getRequestURL({
           origin: this.origin,
-          pathname: join(this.pathname, pluralID),
+          pathname: join(
+            ...[this.pathname, pluralID, options.where?.documentId].flatMap((entry) =>
+              !!entry ? [entry] : []
+            )
+          ),
           params,
         });
 
@@ -427,11 +435,14 @@ class Client {
           });
         }
 
-        const { data, meta } = z
-          .object({ data: z.array(z.any()).catch([]), meta: z.any() })
-          .parse(await response.json());
+        const responseData = await response.json();
 
-        const accData = [...acc, ...data];
+        const { data, meta } = z
+          // .object({ data: z.array(z.any()).catch([]), meta: z.any() })
+          .object({ data: z.any(), meta: z.any() })
+          .parse(responseData);
+
+        const accData = [...acc, ...(Array.isArray(data) ? data : [data])];
 
         if (!pagination) {
           if (meta.pagination?.page < meta.pagination?.pageCount) {
