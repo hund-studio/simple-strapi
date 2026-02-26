@@ -1,4 +1,5 @@
 import { createSimpleException, ensureSimpleException } from "simple-exception";
+import { InferBoolean, BooleanField, BooleanOptions } from "./fields/boolean";
 import { InferNumber, NumberField, NumberOptions } from "./fields/number";
 import { InferText, TextField, TextOptions } from "./fields/text";
 import { join } from "path";
@@ -26,6 +27,7 @@ import {
 import { InferMediaSingle, MediaSingleField, MediaSingleOptions } from "./fields/media";
 import { EnumerationField, EnumerationOptions, InferEnumeration } from "./fields/enumeration";
 import { InferRichTextBlocks, RichTextBlocksField, RichTextBlocksOptions } from "./fields/richText";
+import { InferJSON, JSONField, JSONOptions } from "./fields/json";
 
 type RequestParams = Record<string, any>;
 type EntityRequest<P = {}> = {
@@ -37,6 +39,7 @@ type EntityRequest<P = {}> = {
 export type SchemaField =
   | TextField
   | NumberField
+  | BooleanField
   | RelationHasManyField
   | RelationHasOneField
   | DynamicField
@@ -44,7 +47,8 @@ export type SchemaField =
   | ComponentRepeatableField
   | MediaSingleField
   | EnumerationField
-  | RichTextBlocksField;
+  | RichTextBlocksField
+  | JSONField;
 
 export type Schema = Record<string, SchemaField>;
 
@@ -52,48 +56,52 @@ export type InferSchema<S extends Schema> = {
   [K in keyof S]: S[K] extends ["text", infer O extends TextOptions]
     ? InferText<O>
     : S[K] extends ["number", infer O extends NumberOptions]
-    ? InferNumber<O>
-    : S[K] extends [
-        "relation.hasMany",
-        infer R extends Schema,
-        infer O extends RelationHasManyOptions
-      ]
-    ? InferRelationHasMany<R, O>
-    : S[K] extends [
-        "relation.hasOne",
-        infer R extends Schema,
-        infer O extends RelationHasOneOptions
-      ]
-    ? InferRelationHasOne<R, O>
-    : S[K] extends [
-        "component.single",
-        infer R extends Schema,
-        infer O extends ComponentSingleOptions
-      ]
-    ? InferComponentSingle<R, O>
-    : S[K] extends [
-        "component.repeatable",
-        infer R extends Schema,
-        infer O extends ComponentRepeatableOptions
-      ]
-    ? InferComponentRepeatable<R, O>
-    : S[K] extends [
-        "dynamic",
-        infer B extends Record<string, Schema>,
-        infer O extends DynamicOptions
-      ]
-    ? InferDynamic<B, O>
-    : S[K] extends ["media.single", infer O extends MediaSingleOptions]
-    ? InferMediaSingle<O>
-    : S[K] extends [
-        "enumeration",
-        infer V extends readonly [string, ...string[]],
-        infer O extends EnumerationOptions
-      ]
-    ? InferEnumeration<V, O>
-    : S[K] extends ["richText.blocks", infer O extends RichTextBlocksOptions]
-    ? InferRichTextBlocks<O>
-    : never;
+      ? InferNumber<O>
+      : S[K] extends ["boolean", infer O extends BooleanOptions]
+        ? InferBoolean<O>
+        : S[K] extends ["json", infer O extends JSONOptions]
+          ? InferJSON<O>
+          : S[K] extends [
+                "relation.hasMany",
+                infer R extends Schema,
+                infer O extends RelationHasManyOptions,
+              ]
+            ? InferRelationHasMany<R, O>
+            : S[K] extends [
+                  "relation.hasOne",
+                  infer R extends Schema,
+                  infer O extends RelationHasOneOptions,
+                ]
+              ? InferRelationHasOne<R, O>
+              : S[K] extends [
+                    "component.single",
+                    infer R extends Schema,
+                    infer O extends ComponentSingleOptions,
+                  ]
+                ? InferComponentSingle<R, O>
+                : S[K] extends [
+                      "component.repeatable",
+                      infer R extends Schema,
+                      infer O extends ComponentRepeatableOptions,
+                    ]
+                  ? InferComponentRepeatable<R, O>
+                  : S[K] extends [
+                        "dynamic",
+                        infer B extends Record<string, Schema>,
+                        infer O extends DynamicOptions,
+                      ]
+                    ? InferDynamic<B, O>
+                    : S[K] extends ["media.single", infer O extends MediaSingleOptions]
+                      ? InferMediaSingle<O>
+                      : S[K] extends [
+                            "enumeration",
+                            infer V extends readonly [string, ...string[]],
+                            infer O extends EnumerationOptions,
+                          ]
+                        ? InferEnumeration<V, O>
+                        : S[K] extends ["richText.blocks", infer O extends RichTextBlocksOptions]
+                          ? InferRichTextBlocks<O>
+                          : never;
 };
 
 export type InferSchemaWithDefaults<S extends Schema> = InferSchema<S> &
@@ -113,7 +121,7 @@ class Client {
       ...options
     }: EntityRequest<{
       auth?: { email: string; password: string } | string;
-    }> = {}
+    }> = {},
   ) {
     const endpointURL = new URL(endpoint);
     const origin = endpointURL.origin;
@@ -142,7 +150,7 @@ class Client {
 
   static async getToken(
     auth: { email: string; password: string },
-    { origin, pathname }: { pathname: string; origin: string }
+    { origin, pathname }: { pathname: string; origin: string },
   ) {
     try {
       const requestURL = this.getRequestURL({
@@ -182,7 +190,7 @@ class Client {
       origin: string;
       pathname: string;
       token?: string;
-    }>
+    }>,
   ) {
     const headers = (() => {
       return { ...Client.headers, ...(this.options.headers || {}) };
@@ -275,13 +283,13 @@ class Client {
     options: EntityRequest<{
       schema: S;
       populate?: any;
-    }>
+    }>,
   ): Promise<{ data: InferSchemaWithDefaults<S>; meta: any }>;
   public async getSingle(
     pluralID: string,
     options: EntityRequest<{
       populate?: any;
-    }>
+    }>,
   ): Promise<{ data: any; meta: any }>;
   public async getSingle<S extends Schema | undefined>(
     pluralID: string,
@@ -292,7 +300,7 @@ class Client {
     }: EntityRequest<{
       schema?: S;
       populate?: any;
-    }> = {}
+    }> = {},
   ): Promise<{ data: S extends Schema ? InferSchemaWithDefaults<S> : any; meta: any }> {
     try {
       if ("schema" in options) {
@@ -302,7 +310,7 @@ class Client {
           if ("populate" in options) {
             if (!!options.populate)
               console.warn(
-                "⚠️ Since you provided both the 'populate' and 'schema', the 'populate' parameter will be ignored."
+                "⚠️ Since you provided both the 'populate' and 'schema', the 'populate' parameter will be ignored.",
               );
           }
         }
@@ -365,15 +373,19 @@ class Client {
     options: EntityRequest<{
       schema: S;
       pagination?: false | { page?: number; pageSize?: number };
+      sort?: string | string[];
       populate?: any;
-    }>
+      filters?: Record<string, any>;
+    }>,
   ): Promise<{ data: InferSchemaWithDefaults<S>[]; meta: any }>;
   public async getCollection(
     pluralID: string,
     options: EntityRequest<{
       pagination?: false | { page?: number; pageSize?: number };
+      sort?: string | string[];
       populate?: any;
-    }>
+      filters?: Record<string, any>;
+    }>,
   ): Promise<{ data: any[]; meta: any }>;
   public async getCollection<S extends Schema | undefined>(
     pluralID: string,
@@ -385,8 +397,10 @@ class Client {
     }: EntityRequest<{
       schema?: S;
       pagination?: false | { page?: number; pageSize?: number };
+      sort?: string | string[];
       populate?: any;
-    }> = {}
+      filters?: Record<string, any>;
+    }> = {},
   ): Promise<{ data: S extends Schema ? InferSchemaWithDefaults<S>[] : any[]; meta: any }> {
     try {
       if ("schema" in options) {
@@ -396,7 +410,7 @@ class Client {
           if ("populate" in options) {
             if (!!options.populate)
               console.warn(
-                "⚠️ Since you provided both the 'populate' adnd 'schema', the 'populate' parameter will be ignored."
+                "⚠️ Since you provided both the 'populate' adnd 'schema', the 'populate' parameter will be ignored.",
               );
           }
         }
@@ -404,16 +418,21 @@ class Client {
         params.populate = options.populate;
       }
 
+      if ("sort" in options) {
+        params.sort = options.sort;
+      }
+
       const fetchPage = async (page: number = 1, acc: any[] = []) => {
         params.pagination = { page, pageSize: 100 };
+        params.filters = options.filters;
         if (pagination) params.pagination = { ...params.pagination, ...pagination };
 
         const requestURL = Client.getRequestURL({
           origin: this.origin,
           pathname: join(
             ...[this.pathname, pluralID, options.where?.documentId].flatMap((entry) =>
-              !!entry ? [entry] : []
-            )
+              !!entry ? [entry] : [],
+            ),
           ),
           params,
         });
@@ -474,6 +493,146 @@ class Client {
       }
 
       return { data, meta } as any;
+    } catch (exception) {
+      throw ensureSimpleException(exception);
+    }
+  }
+
+  /**
+   *
+   * WRITE ACTIONS
+   *
+   */
+
+  public async update<S extends Schema>(
+    pluralID: string,
+    documentId: string,
+    payload: any,
+    options: EntityRequest<{ schema?: S }> = {},
+  ): Promise<{ data: InferSchemaWithDefaults<S>; meta: any }> {
+    const path = join(pluralID, documentId);
+    return this.writeRequest("PUT", path, payload, options);
+  }
+
+  public async create<S extends Schema>(
+    pluralID: string,
+    payload: any,
+    options: EntityRequest<{ schema?: S }> = {},
+  ): Promise<{ data: InferSchemaWithDefaults<S>; meta: any }> {
+    return this.writeRequest("POST", pluralID, payload, options);
+  }
+
+  private async writeRequest(
+    method: "POST" | "PUT",
+    path: string,
+    payload: any,
+    { params = {}, headers = {}, ...options }: EntityRequest<{ schema?: any }> = {},
+  ) {
+    try {
+      if ("schema" in options && options.schema) {
+        params.populate = this.populateFromSchema(options.schema);
+      }
+
+      const requestURL = Client.getRequestURL({
+        origin: this.origin,
+        pathname: join(this.pathname, path),
+        params,
+      });
+
+      const response = await fetch(requestURL, {
+        method,
+        headers: {
+          ...this.getAuthorizedHeaders(),
+          ...headers,
+        },
+        body: JSON.stringify({ data: payload }),
+      });
+
+      if (!response.ok) {
+        const errorBody: unknown = await response.json().catch(() => ({}));
+
+        const getErrorMessage = (err: any): string => {
+          if (err && typeof err === "object" && "error" in err) {
+            return err.error?.message || response.statusText;
+          }
+          return response.statusText;
+        };
+
+        throw createSimpleException({
+          code: response.status,
+          message: getErrorMessage(errorBody),
+          type: "error",
+          source: "strapi-utils/client.ts",
+        });
+      }
+
+      const { data, meta } = z
+        .object({ data: z.any(), meta: z.any() })
+        .parse(await response.json());
+
+      if ("schema" in options && options.schema) {
+        const shape = options.schema;
+        const schema = z.object(schemaToParser(shape)).extend(defaultStrapiFields).loose();
+        const result = schema.safeParse(data);
+
+        if (!result.success) {
+          console.warn(`⚠️ ${method} response parsing error`);
+          console.error("🚨 Error details:", result.error);
+          return { data, meta };
+        }
+        return { data: result.data as any, meta };
+      }
+
+      return { data, meta };
+    } catch (exception) {
+      throw ensureSimpleException(exception);
+    }
+  }
+
+  /**
+   * Elimina un'entità specifica tramite il suo documentId.
+   */
+  public async delete(
+    pluralID: string,
+    documentId: string,
+    options: EntityRequest = {},
+  ): Promise<{ data: any; meta: any }> {
+    try {
+      const { params = {}, headers = {} } = options;
+
+      const requestURL = Client.getRequestURL({
+        origin: this.origin,
+        pathname: join(this.pathname, pluralID, documentId),
+        params,
+      });
+
+      const response = await fetch(requestURL, {
+        method: "DELETE",
+        headers: {
+          ...this.getAuthorizedHeaders(),
+          ...headers,
+        },
+      });
+
+      if (!response.ok) {
+        const errorBody: any = await response.json().catch(() => ({}));
+        throw createSimpleException({
+          code: response.status,
+          message: errorBody.error?.message || response.statusText,
+          type: "error",
+          source: "strapi-utils/client.ts",
+        });
+      }
+
+      if (response.status === 204) {
+        return { data: { documentId }, meta: {} };
+      }
+
+      const { data, meta } = z
+        .object({ data: z.any(), meta: z.any() })
+        .parse(await response.json());
+
+      return { data, meta };
     } catch (exception) {
       throw ensureSimpleException(exception);
     }

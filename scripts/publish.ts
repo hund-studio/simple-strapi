@@ -67,7 +67,7 @@ function patchDependencies(pkg: any): boolean {
 
 function runNpmVersion(
   bump: "patch" | "minor" | "major" | "prerelease" | "prepatch" | "preminor" | "premajor",
-  preid?: string
+  preid?: string,
 ) {
   const args = ["version", bump, "--no-git-tag-version"];
   if (preid) {
@@ -81,9 +81,16 @@ function runNpmVersion(
   }
 }
 
-function publish() {
+function publish(tag?: string) {
   console.log("🚀 Publishing to npm...");
-  const result = spawnSync("npm", ["publish", "--access", "public"], { stdio: "inherit" });
+
+  const args = ["publish", "--access", "public"];
+
+  if (tag) {
+    args.push("--tag", tag);
+  }
+
+  const result = spawnSync("npm", args, { stdio: "inherit" });
 
   if (result.status !== 0) {
     throw new Error(`❌ npm publish failed with exit code ${result.status}`);
@@ -133,7 +140,7 @@ function main() {
     console.error(
       "Usage: ts-node publish.ts <bumpType> [preid]\n" +
         "bumpType: patch, minor, major, prerelease, prepatch, preminor, premajor\n" +
-        "preid: alpha, beta, ..."
+        "preid: alpha, beta, ...",
     );
     process.exit(1);
   }
@@ -150,7 +157,7 @@ function main() {
     }
 
     runNpmVersion(bumpType, preid);
-    publish();
+    publish(preid);
     published = true;
   } catch (err) {
     console.error(err);

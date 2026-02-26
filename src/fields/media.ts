@@ -22,6 +22,7 @@ export const zodMediaSchema = z.object({
         height: z.number(),
       })
     )
+    .nullable()
     .optional(),
   hash: z.string(),
   ext: z.string(),

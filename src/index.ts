@@ -7,3 +7,5 @@ export * from "./fields/component";
 export * from "./fields/media";
 export * from "./fields/enumeration";
 export * from "./fields/richText";
+export * from "./fields/boolean";
+export * from "./fields/json";

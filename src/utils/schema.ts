@@ -1,12 +1,14 @@
+import { booleanSchema } from "../fields/boolean";
 import { dynamicSchema } from "../fields/dynamic";
+import { enumerationSchema } from "../fields/enumeration";
 import { mediaSingleSchema } from "../fields/media";
 import { numberSchema } from "../fields/number";
-import { Schema } from "../client";
 import { repeatableSchema, singleSchema } from "../fields/component";
+import { richTextBlocksSchema } from "../fields/richText";
+import { Schema } from "../client";
 import { textSchema } from "../fields/text";
 import z, { ZodType } from "zod";
-import { enumerationSchema } from "../fields/enumeration";
-import { richTextBlocksSchema } from "../fields/richText";
+import { jsonSchema } from "../fields/json";
 
 export const defaultStrapiFields = {
   id: z.number(),
@@ -31,6 +33,16 @@ export const schemaToParser = (schema: Schema) => {
       case "number": {
         const [, args] = field;
         shape[key] = numberSchema(args);
+        break;
+      }
+      case "json": {
+        const [, args] = field;
+        shape[key] = jsonSchema(args);
+        break;
+      }
+      case "boolean": {
+        const [, args] = field;
+        shape[key] = booleanSchema(args);
         break;
       }
       case "dynamic": {
