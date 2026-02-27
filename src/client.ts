@@ -24,7 +24,13 @@ import {
   InferComponentRepeatable,
   InferComponentSingle,
 } from "./fields/component";
-import { InferMediaSingle, MediaSingleField, MediaSingleOptions, zodMediaSchema, ZodMediaType } from "./fields/media";
+import {
+  InferMediaSingle,
+  MediaSingleField,
+  MediaSingleOptions,
+  zodMediaSchema,
+  ZodMediaType,
+} from "./fields/media";
 import { EnumerationField, EnumerationOptions, InferEnumeration } from "./fields/enumeration";
 import { InferRichTextBlocks, RichTextBlocksField, RichTextBlocksOptions } from "./fields/richText";
 import { InferJSON, JSONField, JSONOptions } from "./fields/json";
@@ -648,82 +654,6 @@ class Client {
    * AUTO GENERATED - upload method
    * ==========================================
    */
-  private async getOrCreateFolder(folderPath: string): Promise<number> {
-    const segments = folderPath.split("/").filter(Boolean);
-    let currentParentId: number | null = null;
-
-    for (const segment of segments) {
-      const params =
-        currentParentId === null
-          ? { filters: { name: { $eq: segment }, parent: { $null: true } } }
-          : { filters: { name: { $eq: segment }, parent: { id: { $eq: currentParentId } } } };
-
-      const listURL = Client.getRequestURL({
-        origin: this.origin,
-        pathname: join(this.pathname, "upload/folders"),
-        params,
-      });
-
-      const listResponse = await fetch(listURL, {
-        method: "GET",
-        headers: this.getAuthorizedHeaders(),
-      });
-
-      if (!listResponse.ok) {
-        const errorBody: any = await listResponse.json().catch(() => ({}));
-        throw createSimpleException({
-          code: listResponse.status,
-          message: errorBody.error?.message || listResponse.statusText,
-          type: "error",
-          source: "strapi-utils/client.ts",
-        });
-      }
-
-      const { data: folders } = z
-        .object({ data: z.array(z.object({ id: z.number() }).loose()) })
-        .parse(await listResponse.json());
-
-      if (folders.length > 0) {
-        currentParentId = folders[0].id;
-      } else {
-        const createURL = Client.getRequestURL({
-          origin: this.origin,
-          pathname: join(this.pathname, "upload/folders"),
-          params: {},
-        });
-
-        const createBody =
-          currentParentId === null
-            ? { name: segment }
-            : { name: segment, parent: currentParentId };
-
-        const createResponse = await fetch(createURL, {
-          method: "POST",
-          headers: this.getAuthorizedHeaders(),
-          body: JSON.stringify(createBody),
-        });
-
-        if (!createResponse.ok) {
-          const errorBody: any = await createResponse.json().catch(() => ({}));
-          throw createSimpleException({
-            code: createResponse.status,
-            message: errorBody.error?.message || createResponse.statusText,
-            type: "error",
-            source: "strapi-utils/client.ts",
-          });
-        }
-
-        const { data: created } = z
-          .object({ data: z.object({ id: z.number() }).loose() })
-          .parse(await createResponse.json());
-
-        currentParentId = created.id;
-      }
-    }
-
-    return currentParentId!;
-  }
-
   /**
    * Carica un file sulla Media Library di Strapi.
    *
@@ -748,7 +678,6 @@ class Client {
       ref?: string;
       refId?: string | number;
       field?: string;
-      path?: string;
       headers?: Record<string, string>;
     } = {},
   ): Promise<ZodMediaType[]> {
@@ -782,19 +711,11 @@ class Client {
         fileName = options.filename ?? ("name" in file ? (file as any).name : "upload");
       }
 
-      let folderId: number | undefined;
-      if (options.path) {
-        folderId = await this.getOrCreateFolder(options.path);
-      }
-
       const formData = new FormData();
       formData.append("files", blob, fileName);
       if (ref !== undefined) formData.append("ref", this.resolveRef(ref));
       if (refId !== undefined) formData.append("refId", String(refId));
       if (field !== undefined) formData.append("field", field);
-      if (folderId !== undefined) {
-        formData.append("fileInfo", JSON.stringify({ folder: folderId }));
-      }
 
       const requestURL = Client.getRequestURL({
         origin: this.origin,
