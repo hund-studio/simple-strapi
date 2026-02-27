@@ -24,7 +24,7 @@ import {
   InferComponentRepeatable,
   InferComponentSingle,
 } from "./fields/component";
-import { InferMediaSingle, MediaSingleField, MediaSingleOptions } from "./fields/media";
+import { InferMediaSingle, MediaSingleField, MediaSingleOptions, zodMediaSchema, ZodMediaType } from "./fields/media";
 import { EnumerationField, EnumerationOptions, InferEnumeration } from "./fields/enumeration";
 import { InferRichTextBlocks, RichTextBlocksField, RichTextBlocksOptions } from "./fields/richText";
 import { InferJSON, JSONField, JSONOptions } from "./fields/json";
@@ -275,6 +275,11 @@ class Client {
     }
 
     return populate;
+  };
+
+  private resolveRef = (ref: string): string => {
+    if (ref.includes("::")) return ref;
+    return `api::${ref}.${ref}`;
   };
 
   // #region AIGENERATED
@@ -637,6 +642,199 @@ class Client {
       throw ensureSimpleException(exception);
     }
   }
+
+  /*
+   * ==========================================
+   * AUTO GENERATED - upload method
+   * ==========================================
+   */
+  private async getOrCreateFolder(folderPath: string): Promise<number> {
+    const segments = folderPath.split("/").filter(Boolean);
+    let currentParentId: number | null = null;
+
+    for (const segment of segments) {
+      const params =
+        currentParentId === null
+          ? { filters: { name: { $eq: segment }, parent: { $null: true } } }
+          : { filters: { name: { $eq: segment }, parent: { id: { $eq: currentParentId } } } };
+
+      const listURL = Client.getRequestURL({
+        origin: this.origin,
+        pathname: join(this.pathname, "upload/folders"),
+        params,
+      });
+
+      const listResponse = await fetch(listURL, {
+        method: "GET",
+        headers: this.getAuthorizedHeaders(),
+      });
+
+      if (!listResponse.ok) {
+        const errorBody: any = await listResponse.json().catch(() => ({}));
+        throw createSimpleException({
+          code: listResponse.status,
+          message: errorBody.error?.message || listResponse.statusText,
+          type: "error",
+          source: "strapi-utils/client.ts",
+        });
+      }
+
+      const { data: folders } = z
+        .object({ data: z.array(z.object({ id: z.number() }).loose()) })
+        .parse(await listResponse.json());
+
+      if (folders.length > 0) {
+        currentParentId = folders[0].id;
+      } else {
+        const createURL = Client.getRequestURL({
+          origin: this.origin,
+          pathname: join(this.pathname, "upload/folders"),
+          params: {},
+        });
+
+        const createBody =
+          currentParentId === null
+            ? { name: segment }
+            : { name: segment, parent: currentParentId };
+
+        const createResponse = await fetch(createURL, {
+          method: "POST",
+          headers: this.getAuthorizedHeaders(),
+          body: JSON.stringify(createBody),
+        });
+
+        if (!createResponse.ok) {
+          const errorBody: any = await createResponse.json().catch(() => ({}));
+          throw createSimpleException({
+            code: createResponse.status,
+            message: errorBody.error?.message || createResponse.statusText,
+            type: "error",
+            source: "strapi-utils/client.ts",
+          });
+        }
+
+        const { data: created } = z
+          .object({ data: z.object({ id: z.number() }).loose() })
+          .parse(await createResponse.json());
+
+        currentParentId = created.id;
+      }
+    }
+
+    return currentParentId!;
+  }
+
+  /**
+   * Carica un file sulla Media Library di Strapi.
+   *
+   * @param file - Sorgente del file: `Blob`, `File` (browser) oppure stringa base64
+   *               (data URI `data:mime;base64,...` o raw base64).
+   * @param options.filename - Nome del file nel FormData. Obbligatorio per base64 e
+   *                           Blob senza nome; per `File` viene estratto automaticamente.
+   * @param options.ref - Nome del Content Type (es. `"product"` → `api::product.product`)
+   *                      oppure UID completo (es. `"plugin::users-permissions.user"`).
+   * @param options.refId - `documentId` dell'entità a cui agganciare il file.
+   * @param options.field - Nome del campo top-level dell'entità.
+   *                        ⚠️ I campi annidati (dot-notation) non sono supportati
+   *                        nativamente dall'endpoint `/upload` di Strapi: caricare
+   *                        il file separatamente e aggiornare l'entità con `update`.
+   * @param options.path - Percorso della cartella nella Media Library (es. `"products/2024"`).
+   *                       La cartella viene creata automaticamente se non esiste (mkdir -p).
+   */
+  public async upload(
+    file: Blob | string,
+    options: {
+      filename?: string;
+      ref?: string;
+      refId?: string | number;
+      field?: string;
+      path?: string;
+      headers?: Record<string, string>;
+    } = {},
+  ): Promise<ZodMediaType[]> {
+    try {
+      const { ref, refId, field, headers = {} } = options;
+
+      let blob: Blob;
+      let fileName: string;
+
+      if (typeof file === "string") {
+        let mimeType = "application/octet-stream";
+        let rawBase64 = file;
+        if (file.startsWith("data:")) {
+          const commaIndex = file.indexOf(",");
+          mimeType = file.slice(5, file.indexOf(";"));
+          rawBase64 = file.slice(commaIndex + 1);
+        }
+        const bytes =
+          typeof Buffer !== "undefined"
+            ? new Uint8Array(Buffer.from(rawBase64, "base64"))
+            : (() => {
+                const bin = atob(rawBase64);
+                const arr = new Uint8Array(bin.length);
+                for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+                return arr;
+              })();
+        blob = new Blob([bytes], { type: mimeType });
+        fileName = options.filename ?? "upload";
+      } else {
+        blob = file;
+        fileName = options.filename ?? ("name" in file ? (file as any).name : "upload");
+      }
+
+      let folderId: number | undefined;
+      if (options.path) {
+        folderId = await this.getOrCreateFolder(options.path);
+      }
+
+      const formData = new FormData();
+      formData.append("files", blob, fileName);
+      if (ref !== undefined) formData.append("ref", this.resolveRef(ref));
+      if (refId !== undefined) formData.append("refId", String(refId));
+      if (field !== undefined) formData.append("field", field);
+      if (folderId !== undefined) {
+        formData.append("fileInfo", JSON.stringify({ folder: folderId }));
+      }
+
+      const requestURL = Client.getRequestURL({
+        origin: this.origin,
+        pathname: join(this.pathname, "upload"),
+        params: {},
+      });
+
+      const { "Content-Type": _ct, ...headersWithoutContentType } =
+        this.getAuthorizedHeaders() as Record<string, string>;
+
+      const response = await fetch(requestURL, {
+        method: "POST",
+        headers: {
+          ...headersWithoutContentType,
+          ...headers,
+        },
+        body: formData as any,
+      });
+
+      if (!response.ok) {
+        const errorBody: any = await response.json().catch(() => ({}));
+        throw createSimpleException({
+          code: response.status,
+          message: errorBody.error?.message || response.statusText,
+          type: "error",
+          source: "strapi-utils/client.ts",
+        });
+      }
+
+      const data = await response.json();
+      return z.array(zodMediaSchema).parse(data);
+    } catch (exception) {
+      throw ensureSimpleException(exception);
+    }
+  }
+  /*
+   * ==========================================
+   * END AUTO GENERATED - upload method
+   * ==========================================
+   */
   // #endregion
 }
 

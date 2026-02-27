@@ -36,7 +36,7 @@ export const zodMediaSchema = z.object({
   updatedAt: z.iso.datetime(),
 });
 
-type ZodMediaType = z.output<typeof zodMediaSchema>;
+export type ZodMediaType = z.output<typeof zodMediaSchema>;
 
 export type MediaSingleOptions = {
   // nullable?: boolean;
