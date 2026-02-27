@@ -11,6 +11,7 @@
 - Auto-pagination: fetch all pages automatically or control pagination manually
 - Authentication via API token or email/password credentials
 - All fields support `required` option for strict TypeScript types
+- Upload files to the Media Library with auto folder creation (`mkdir -p`)
 
 ## Installation
 
@@ -239,6 +240,55 @@ await client.delete("articles", "abc123");
 
 ---
 
+### `client.upload(file, options?)`
+
+Uploads a file to the Strapi Media Library. Returns an array of the uploaded media objects.
+
+```ts
+const media = await client.upload(file, options?)
+```
+
+| Parameter | Type | Description |
+|---|---|---|
+| `file` | `Blob \| File \| string` | File source: a `Blob`, a browser `File`, a base64 data URI (`data:mime;base64,...`), or a raw base64 string |
+| `options.filename` | `string` | File name in the upload form. Required for `Blob` and raw base64; auto-extracted from `File` |
+| `options.ref` | `string` | Content Type name (e.g. `"product"` → auto-resolves to `api::product.product`) or a full UID (e.g. `"plugin::users-permissions.user"`) |
+| `options.refId` | `string \| number` | `documentId` of the entity to attach the file to |
+| `options.field` | `string` | Top-level field name on the entity. Nested fields (dot-notation) are not supported by Strapi's `/upload` endpoint |
+| `options.path` | `string` | Folder path in the Media Library (e.g. `"products/2024"`). Created automatically if it doesn't exist (like `mkdir -p`) |
+| `options.headers` | `Record<string, string>` | Extra request headers |
+
+**Returns:** `Promise<ZodMediaType[]>`
+
+**Examples:**
+
+```ts
+// Upload a File from a browser input
+const [file] = inputEl.files!;
+const [uploaded] = await client.upload(file, { path: "products/2024" });
+console.log(uploaded.url);
+
+// Upload a base64 data URI and attach it to an entity
+const [media] = await client.upload(
+  "data:image/png;base64,iVBORw0KGgo...",
+  {
+    filename: "cover.png",
+    ref: "article",         // auto-resolved to api::article.article
+    refId: "abc123",
+    field: "cover",
+    path: "articles",
+  },
+);
+
+// Upload a Blob with a custom filename
+const blob = new Blob([buffer], { type: "image/jpeg" });
+const [result] = await client.upload(blob, { filename: "photo.jpg" });
+```
+
+> **Note:** Strapi's `/upload` endpoint does not support attaching files to nested fields via dot-notation. Upload the file first, then use `client.update()` to set the field.
+
+---
+
 ## Schema field helpers
 
 Schemas are plain objects where each key maps to a field definition tuple. All field helpers accept an optional `options` object.
@@ -388,7 +438,7 @@ The resolved `MediaType` shape:
 |---|---|---|---|
 | `required` | `boolean` | `false` | If true, type is `MediaType` instead of `MediaType \| null \| undefined` |
 
-TypeScript types: `MediaSingleField`, `MediaSingleOptions`, `InferMediaSingle<O>`, `zodMediaSchema`
+TypeScript types: `MediaSingleField`, `MediaSingleOptions`, `InferMediaSingle<O>`, `ZodMediaType`, `zodMediaSchema`
 
 ---
 
