@@ -1,0 +1,66 @@
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check Version Type
+        id: check_version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [[ $VERSION == *"-"* ]]; then
+            echo "IS_PRERELEASE=true" >> $GITHUB_ENV
+            echo "NPM_TAG=beta" >> $GITHUB_ENV
+          else
+            echo "IS_PRERELEASE=false" >> $GITHUB_ENV
+            echo "NPM_TAG=latest" >> $GITHUB_ENV
+          fi
+
+      - name: Publish to npm
+        run: npm publish --tag ${{ env.NPM_TAG }} --provenance --access public
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          prerelease: ${{ env.IS_PRERELEASE }}
+          generate_release_notes: true
+          files: |
+            dist-cli/cli.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Notify Discord
+        if: success()
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          status: ${{ job.status }}
+          title: "🚀 Nuova Release Disponibile: ${{ github.ref_name }}!"
+          description: |
+            Il pacchetto **mdgen** è stato pubblicato con successo.
+            Versione: `${{ github.ref_name }}` (Tag: ${{ env.NPM_TAG }})
+
+            [Visualizza su GitHub](${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }})
+          color: 0x28a745
