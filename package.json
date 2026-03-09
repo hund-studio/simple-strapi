@@ -1,10 +1,9 @@
 {
   "name": "simple-strapi",
-  "version": "1.0.0-alpha.27",
+  "version": "1.0.0-alpha.26",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "readme": "docs/NPM.md",
   "exports": {
     ".": {
       "import": "./dist/index.js",
