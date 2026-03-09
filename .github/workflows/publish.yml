@@ -29,8 +29,9 @@ jobs:
         run: |
           VERSION=$(node -p "require('./package.json').version")
           if [[ $VERSION == *"-"* ]]; then
+            NPM_TAG=$(node -p "require('./package.json').version.split('-')[1].split('.')[0]")
             echo "IS_PRERELEASE=true" >> $GITHUB_ENV
-            echo "NPM_TAG=beta" >> $GITHUB_ENV
+            echo "NPM_TAG=$NPM_TAG" >> $GITHUB_ENV
           else
             echo "IS_PRERELEASE=false" >> $GITHUB_ENV
             echo "NPM_TAG=latest" >> $GITHUB_ENV
