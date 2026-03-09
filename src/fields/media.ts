@@ -62,12 +62,30 @@ const single = <O extends MediaSingleOptions = {}>(options: O = {} as O): ["medi
 
 export const mediaSingleSchema = (opts: MediaSingleOptions): ZodType => {
   let schema: ZodType = zodMediaSchema;
-  // if (opts.nullable) schema = schema.nullable();
-  // if (opts.optional) schema = schema.optional();
   if (!opts.required) schema = schema.nullable().optional();
   return schema;
 };
 
 export type MediaSingleField = readonly ["media.single", MediaSingleOptions];
 
-export const media = { single };
+export type MediaMultipleOptions = {
+  required?: boolean;
+};
+
+export type InferMediaMultiple<O extends MediaMultipleOptions> = O["required"] extends true
+  ? ZodMediaType[]
+  : ZodMediaType[] | null | undefined;
+
+const multiple = <O extends MediaMultipleOptions = {}>(options: O = {} as O): ["media.multiple", O] => {
+  return ["media.multiple", options];
+};
+
+export const mediaMultipleSchema = (opts: MediaMultipleOptions): ZodType => {
+  let schema: ZodType = z.array(zodMediaSchema);
+  if (!opts.required) schema = schema.nullable().optional();
+  return schema;
+};
+
+export type MediaMultipleField = readonly ["media.multiple", MediaMultipleOptions];
+
+export const media = { single, multiple };

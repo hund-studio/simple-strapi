@@ -28,6 +28,9 @@ import {
   InferMediaSingle,
   MediaSingleField,
   MediaSingleOptions,
+  InferMediaMultiple,
+  MediaMultipleField,
+  MediaMultipleOptions,
   zodMediaSchema,
   ZodMediaType,
 } from "./fields/media";
@@ -52,6 +55,7 @@ export type SchemaField =
   | ComponentSingleField
   | ComponentRepeatableField
   | MediaSingleField
+  | MediaMultipleField
   | EnumerationField
   | RichTextBlocksField
   | JSONField;
@@ -99,7 +103,9 @@ export type InferSchema<S extends Schema> = {
                     ? InferDynamic<B, O>
                     : S[K] extends ["media.single", infer O extends MediaSingleOptions]
                       ? InferMediaSingle<O>
-                      : S[K] extends [
+                      : S[K] extends ["media.multiple", infer O extends MediaMultipleOptions]
+                        ? InferMediaMultiple<O>
+                        : S[K] extends [
                             "enumeration",
                             infer V extends readonly [string, ...string[]],
                             infer O extends EnumerationOptions,
@@ -272,6 +278,7 @@ class Client {
           if (!Object.keys(populate[key].populate)["length"]) populate[key] = true;
           break;
         case "media.single":
+        case "media.multiple":
           populate[key] = { populate: true };
           break;
         case "dynamic":

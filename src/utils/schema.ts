@@ -1,7 +1,7 @@
 import { booleanSchema } from "../fields/boolean";
 import { dynamicSchema } from "../fields/dynamic";
 import { enumerationSchema } from "../fields/enumeration";
-import { mediaSingleSchema } from "../fields/media";
+import { mediaSingleSchema, mediaMultipleSchema } from "../fields/media";
 import { numberSchema } from "../fields/number";
 import { repeatableSchema, singleSchema } from "../fields/component";
 import { richTextBlocksSchema } from "../fields/richText";
@@ -63,6 +63,11 @@ export const schemaToParser = (schema: Schema) => {
       case "media.single": {
         const [, args] = field;
         shape[key] = mediaSingleSchema(args);
+        break;
+      }
+      case "media.multiple": {
+        const [, args] = field;
+        shape[key] = mediaMultipleSchema(args);
         break;
       }
       case "enumeration": {
