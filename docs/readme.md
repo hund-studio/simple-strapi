@@ -279,7 +279,7 @@ const media = await client.upload(file, options?)
 ```ts
 // Upload a File from a browser input
 const [file] = inputEl.files!;
-const [uploaded] = await client.upload(file, { path: "products/2024" });
+const [uploaded] = await client.upload(file);
 console.log(uploaded.url);
 
 // Upload a base64 data URI and attach it to an entity
@@ -454,6 +454,27 @@ TypeScript types: `MediaSingleField`, `MediaSingleOptions`, `InferMediaSingle<O>
 
 ---
 
+### `media.multiple(options?)`
+
+A multiple Strapi media upload field (array). Automatically adds the correct `populate` entry.
+
+```ts
+import { media } from "simple-strapi";
+
+media.multiple(); // MediaType[] | null | undefined
+media.multiple({ required: true }); // MediaType[]
+```
+
+The resolved `MediaType` shape is the same as [`media.single()`](#mediasingleoptions).
+
+| Option     | Type      | Default | Description                                                                      |
+| ---------- | --------- | ------- | -------------------------------------------------------------------------------- |
+| `required` | `boolean` | `false` | If true, type is `MediaType[]` instead of `MediaType[] \| null \| undefined` |
+
+TypeScript types: `MediaMultipleField`, `MediaMultipleOptions`, `InferMediaMultiple<O>`
+
+---
+
 ### `richText.blocks(options?)`
 
 A Strapi rich text blocks field (Strapi v5 block editor format).
@@ -473,6 +494,11 @@ type RichTextBlocks = Array<
   | { type: "heading"; level: number; children: ParagraphChild[] }
   | { type: "list"; format: "ordered" | "unordered"; children: ListItemBlock[] }
 >;
+
+type ListItemBlock = {
+  type: "list-item";
+  children: ParagraphChild[];
+};
 
 type ParagraphChild =
   | {
