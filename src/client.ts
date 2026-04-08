@@ -11,8 +11,23 @@ import {
   RelationHasOneField,
   RelationHasOneOptions,
 } from "./fields/relation";
-import fetch from "node-fetch";
+import fetch, { type Response } from "node-fetch";
+import http from "http";
+import https from "https";
 import qs from "qs";
+
+const httpAgent = new http.Agent({ keepAlive: true });
+const httpsAgent = new https.Agent({ keepAlive: true });
+
+function agentFor(url: URL): http.Agent | https.Agent {
+  return url.protocol === "https:" ? httpsAgent : httpAgent;
+}
+
+async function safeResponseJson(response: Response): Promise<unknown> {
+  const text = await response.text();
+  if (!text) return null;
+  return JSON.parse(text);
+}
 import z from "zod";
 import { DynamicField, DynamicOptions, InferDynamic } from "./fields/dynamic";
 import { defaultStrapiFields, defaultStrapiFieldsSchema, schemaToParser } from "./utils/schema";
@@ -106,14 +121,14 @@ export type InferSchema<S extends Schema> = {
                       : S[K] extends ["media.multiple", infer O extends MediaMultipleOptions]
                         ? InferMediaMultiple<O>
                         : S[K] extends [
-                            "enumeration",
-                            infer V extends readonly [string, ...string[]],
-                            infer O extends EnumerationOptions,
-                          ]
-                        ? InferEnumeration<V, O>
-                        : S[K] extends ["richText.blocks", infer O extends RichTextBlocksOptions]
-                          ? InferRichTextBlocks<O>
-                          : never;
+                              "enumeration",
+                              infer V extends readonly [string, ...string[]],
+                              infer O extends EnumerationOptions,
+                            ]
+                          ? InferEnumeration<V, O>
+                          : S[K] extends ["richText.blocks", infer O extends RichTextBlocksOptions]
+                            ? InferRichTextBlocks<O>
+                            : never;
 };
 
 export type InferSchemaWithDefaults<S extends Schema> = InferSchema<S> &
@@ -173,6 +188,7 @@ class Client {
         method: "POST",
         headers: this.headers,
         body: JSON.stringify({ identifier: auth.email, password: auth.password }),
+        agent: agentFor(requestURL),
       });
       if (!response.ok) {
         throw createSimpleException({
@@ -182,7 +198,7 @@ class Client {
           source: "strapi-utils/client.ts",
         });
       }
-      const data = await response.json();
+      const data = await safeResponseJson(response);
       const { token } = z.object({ token: z.string() }).parse(data);
       return token;
     } catch (exception) {
@@ -348,6 +364,7 @@ class Client {
           ...this.getAuthorizedHeaders(),
           ...headers,
         },
+        agent: agentFor(requestURL),
       });
 
       if (!response.ok) {
@@ -361,7 +378,7 @@ class Client {
 
       const { data, meta } = z
         .object({ data: z.any(), meta: z.any() })
-        .parse(await response.json());
+        .parse(await safeResponseJson(response));
 
       if (!data) throw createSimpleException({ code: 404, type: "error", message: "Not found" });
 
@@ -461,6 +478,7 @@ class Client {
             ...this.getAuthorizedHeaders(),
             ...headers,
           },
+          agent: agentFor(requestURL),
         });
 
         if (!response.ok) {
@@ -472,7 +490,7 @@ class Client {
           });
         }
 
-        const responseData = await response.json();
+        const responseData = await safeResponseJson(response);
 
         const { data, meta } = z
           // .object({ data: z.array(z.any()).catch([]), meta: z.any() })
@@ -564,6 +582,7 @@ class Client {
           ...headers,
         },
         body: JSON.stringify({ data: payload }),
+        agent: agentFor(requestURL),
       });
 
       if (!response.ok) {
@@ -586,7 +605,7 @@ class Client {
 
       const { data, meta } = z
         .object({ data: z.any(), meta: z.any() })
-        .parse(await response.json());
+        .parse(await safeResponseJson(response));
 
       if ("schema" in options && options.schema) {
         const shape = options.schema;
@@ -630,6 +649,7 @@ class Client {
           ...this.getAuthorizedHeaders(),
           ...headers,
         },
+        agent: agentFor(requestURL),
       });
 
       if (!response.ok) {
@@ -648,7 +668,7 @@ class Client {
 
       const { data, meta } = z
         .object({ data: z.any(), meta: z.any() })
-        .parse(await response.json());
+        .parse(await safeResponseJson(response));
 
       return { data, meta };
     } catch (exception) {
@@ -740,6 +760,7 @@ class Client {
           ...headers,
         },
         body: formData as any,
+        agent: agentFor(requestURL),
       });
 
       if (!response.ok) {
@@ -752,7 +773,7 @@ class Client {
         });
       }
 
-      const data = await response.json();
+      const data = await safeResponseJson(response);
       return z.array(zodMediaSchema).parse(data);
     } catch (exception) {
       throw ensureSimpleException(exception);
