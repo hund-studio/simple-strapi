@@ -47,8 +47,6 @@ jobs:
           name: Release ${{ github.ref_name }}
           prerelease: ${{ env.IS_PRERELEASE }}
           generate_release_notes: true
-          files: |
-            dist-cli/cli.js
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -60,7 +58,7 @@ jobs:
           status: ${{ job.status }}
           title: "🚀 Nuova Release Disponibile: ${{ github.ref_name }}!"
           description: |
-            Il pacchetto **mdgen** è stato pubblicato con successo.
+            Il pacchetto **simple-strapi** è stato pubblicato con successo.
             Versione: `${{ github.ref_name }}` (Tag: ${{ env.NPM_TAG }})
 
             [Visualizza su GitHub](${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }})
