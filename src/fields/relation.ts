@@ -1,4 +1,4 @@
-import { InferSchema, InferSchemaWithDefaults, Schema } from "../client";
+import { InferSchema, InferSchemaWithDefaults, Schema } from "../client.js";
 
 /**
  * HAS MANY

@@ -1,7 +1,7 @@
 import { createSimpleException, ensureSimpleException } from "simple-exception";
-import { InferBoolean, BooleanField, BooleanOptions } from "./fields/boolean";
-import { InferNumber, NumberField, NumberOptions } from "./fields/number";
-import { InferText, TextField, TextOptions } from "./fields/text";
+import { InferBoolean, BooleanField, BooleanOptions } from "./fields/boolean.js";
+import { InferNumber, NumberField, NumberOptions } from "./fields/number.js";
+import { InferText, TextField, TextOptions } from "./fields/text.js";
 import { join } from "path";
 import {
   InferRelationHasMany,
@@ -10,7 +10,7 @@ import {
   RelationHasManyOptions,
   RelationHasOneField,
   RelationHasOneOptions,
-} from "./fields/relation";
+} from "./fields/relation.js";
 import fetch, { type Response } from "node-fetch";
 import http from "http";
 import https from "https";
@@ -29,8 +29,8 @@ async function safeResponseJson(response: Response): Promise<unknown> {
   return JSON.parse(text);
 }
 import z from "zod";
-import { DynamicField, DynamicOptions, InferDynamic } from "./fields/dynamic";
-import { defaultStrapiFields, defaultStrapiFieldsSchema, schemaToParser } from "./utils/schema";
+import { DynamicField, DynamicOptions, InferDynamic } from "./fields/dynamic.js";
+import { defaultStrapiFields, defaultStrapiFieldsSchema, schemaToParser } from "./utils/schema.js";
 import {
   ComponentRepeatableField,
   ComponentRepeatableOptions,
@@ -38,7 +38,7 @@ import {
   ComponentSingleOptions,
   InferComponentRepeatable,
   InferComponentSingle,
-} from "./fields/component";
+} from "./fields/component.js";
 import {
   InferMediaSingle,
   MediaSingleField,
@@ -48,10 +48,10 @@ import {
   MediaMultipleOptions,
   zodMediaSchema,
   ZodMediaType,
-} from "./fields/media";
-import { EnumerationField, EnumerationOptions, InferEnumeration } from "./fields/enumeration";
-import { InferRichTextBlocks, RichTextBlocksField, RichTextBlocksOptions } from "./fields/richText";
-import { InferJSON, JSONField, JSONOptions } from "./fields/json";
+} from "./fields/media.js";
+import { EnumerationField, EnumerationOptions, InferEnumeration } from "./fields/enumeration.js";
+import { InferRichTextBlocks, RichTextBlocksField, RichTextBlocksOptions } from "./fields/richText.js";
+import { InferJSON, JSONField, JSONOptions } from "./fields/json.js";
 
 type RequestParams = Record<string, any>;
 type EntityRequest<P = {}> = {
@@ -59,6 +59,25 @@ type EntityRequest<P = {}> = {
   params?: RequestParams;
   headers?: Record<string, string>;
 } & P;
+
+/**
+ * Cosa fare quando la risposta non combacia con lo schema dichiarato.
+ *
+ * `"throw"` è il default, ed è l'unico che non mente: lo schema è anche il tipo di
+ * ritorno, quindi una risposta che non lo rispetta è un dato che il chiamante non può
+ * usare. `"skip"` serve a chi preferisce un archivio incompleto a una pagina rotta —
+ * con la collection scarta le entry non valide, con la singola restituisce `null`, e
+ * in entrambi i casi lascia un avviso nei log.
+ */
+export type ParseErrorMode = "throw" | "skip";
+
+/** I parametri di lettura che non fanno parte del populate. */
+type ReadRequest = {
+  /** Codice della locale i18n, es. `"it"`. */
+  locale?: string;
+  /** Versione da leggere: `"published"` è il default di Strapi. */
+  status?: "draft" | "published";
+};
 
 export type SchemaField =
   | TextField
@@ -245,65 +264,152 @@ class Client {
     return headers;
   };
 
-  private populateFromSchema = (shape: Schema) => {
-    const populateHasManyRelation = ([, shape]: RelationHasManyField) => {
-      return this.populateFromSchema(shape);
+  /**
+   * Compone i parametri di una richiesta a partire da tre livelli, dal più debole al
+   * più forte: i default del client, quelli della chiamata, quelli espliciti
+   * (`locale`, `status`).
+   *
+   * Restituisce sempre un oggetto nuovo: il `params` di chi chiama non va toccato,
+   * altrimenti una costante di modulo riusata fra due query si porta dietro il
+   * `populate` della prima.
+   */
+  private buildParams = (params: RequestParams = {}, explicit: RequestParams = {}) => {
+    const merged: RequestParams = { ...this.params, ...params };
+
+    for (const [key, value] of Object.entries(explicit)) {
+      if (value !== undefined) merged[key] = value;
+    }
+
+    return merged;
+  };
+
+  /**
+   * Il messaggio d'errore di Strapi, che sta nel corpo e non nello status.
+   *
+   * Senza questo un populate malformato risponde `400 Bad Request` e basta, mentre
+   * il corpo dice esattamente quale parametro è sbagliato.
+   */
+  private static async messageFrom(response: Response) {
+    try {
+      const body = (await safeResponseJson(response)) as any;
+      const message = body?.error?.message;
+      if (typeof message === "string" && message.length > 0) return message;
+    } catch {
+      /* Corpo non JSON o già consumato: resta lo statusText. */
+    }
+
+    return response.statusText;
+  }
+
+  /**
+   * Valida un'entità contro lo schema, e traduce il fallimento in qualcosa di
+   * leggibile: quale entità, quale campo, cosa ci si aspettava.
+   */
+  private parseEntity = (
+    shape: Schema,
+    data: unknown,
+    { pluralID, onParseError }: { pluralID: string; onParseError: ParseErrorMode },
+  ) => {
+    const schema = z.object(schemaToParser(shape)).extend(defaultStrapiFields).loose();
+    const result = schema.safeParse(data);
+
+    if (result.success) return result.data;
+
+    const detail = result.error.issues
+      .map((issue) => `${issue.path.join(".") || "(radice)"}: ${issue.message}`)
+      .join("; ");
+    const message = `La risposta di \`${pluralID}\` non combacia con lo schema — ${detail}`;
+
+    if (onParseError === "throw") {
+      throw createSimpleException({
+        code: 422,
+        type: "error",
+        message,
+        source: "simple-strapi/client.ts",
+      });
+    }
+
+    console.warn(`⚠️ ${message}`);
+    return null;
+  };
+
+  /**
+   * Traduce uno schema nella query che Strapi si aspetta: quali relazioni popolare
+   * (`populate`) e quali attributi chiedere (`fields`).
+   *
+   * I `fields` sono la metà che mancava. Senza, la proiezione ristretta è vera solo
+   * nei tipi: sul filo arriva ogni attributo dell'entità e di ognuna delle sue
+   * relazioni popolate — un archivio di schede che dichiara quattro campi si porta
+   * a casa anche gli abstract interi.
+   *
+   * Restano fuori i media: il loro oggetto ha una forma fissa che lo zod di uscita
+   * pretende per intero, e restringerla romperebbe il parsing invece di alleggerirlo.
+   *
+   * `restrict: false` disattiva i soli `fields` e lascia il populate com'è: serve a
+   * chi legge campi che non ha dichiarato, cosa che i tipi non promettono ma che
+   * `.loose()` permette a runtime.
+   */
+  private queryFromSchema = (
+    shape: Schema,
+    { restrict }: { restrict: boolean },
+  ): { fields: string[]; populate: Record<string, any> } => {
+    /**
+     * Il nodo di una relazione o di un componente: `fields`, `populate`, o `true` se
+     * non c'è niente da dire — che è la forma minima con cui Strapi popola tutto.
+     */
+    const branch = (nested: Schema) => {
+      const { fields, populate } = this.queryFromSchema(nested, { restrict });
+      const node: Record<string, any> = {};
+
+      if (fields.length) node.fields = fields;
+      if (Object.keys(populate).length) node.populate = populate;
+
+      return Object.keys(node).length ? node : true;
     };
 
-    const populateHasOneRelation = ([, shape]: RelationHasOneField) => {
-      return this.populateFromSchema(shape);
+    const dynamicBlocks = ([, blocks]: DynamicField) => {
+      const on: Record<string, any> = {};
+      for (const [key, block] of Object.entries(blocks)) on[key] = branch(block);
+      return on;
     };
 
-    const populateComponentSingle = ([, shape]: ComponentSingleField) => {
-      return this.populateFromSchema(shape);
-    };
-
-    const populateComponentRepeatable = ([, shape]: ComponentRepeatableField) => {
-      return this.populateFromSchema(shape);
-    };
-
-    const populateDynamic = ([, shape]: DynamicField) => {
-      const blocks: Record<string, any> = {};
-
-      for (const [key, field] of Object.entries(shape)) {
-        blocks[key] = { populate: this.populateFromSchema(field) };
-        if (!Object.keys(blocks[key].populate)["length"]) blocks[key] = true;
-      }
-
-      return blocks;
-    };
-
+    const fields: string[] = [];
     const populate: Record<string, any> = {};
 
     for (const [key, field] of Object.entries(shape)) {
       switch (field[0]) {
+        case "text":
+        case "number":
+        case "boolean":
+        case "json":
+        case "enumeration":
+        case "richText.blocks":
+          if (restrict) fields.push(key);
+          break;
         case "relation.hasMany":
-          populate[key] = { populate: populateHasManyRelation(field) };
-          if (!Object.keys(populate[key].populate)["length"]) populate[key] = true;
-          break;
         case "relation.hasOne":
-          populate[key] = { populate: populateHasOneRelation(field) };
-          if (!Object.keys(populate[key].populate)["length"]) populate[key] = true;
-          break;
         case "component.single":
-          populate[key] = { populate: populateComponentSingle(field) };
-          if (!Object.keys(populate[key].populate)["length"]) populate[key] = true;
-          break;
         case "component.repeatable":
-          populate[key] = { populate: populateComponentRepeatable(field) };
-          if (!Object.keys(populate[key].populate)["length"]) populate[key] = true;
+          populate[key] = branch(field[1]);
           break;
+        /*
+         * Un media si popola con `true` e basta. `{ populate: true }` — che è quel
+         * che la libreria emetteva — Strapi 5 lo rifiuta con `Invalid key true`,
+         * perché in quella posizione si aspetta i nomi dei campi da popolare e non
+         * un booleano. Verificato contro un backend vero: era il motivo per cui
+         * nessuna query con un'immagine poteva funzionare.
+         */
         case "media.single":
         case "media.multiple":
-          populate[key] = { populate: true };
+          populate[key] = true;
           break;
         case "dynamic":
-          populate[key] = { on: populateDynamic(field) };
+          populate[key] = { on: dynamicBlocks(field) };
           break;
       }
     }
 
-    return populate;
+    return { fields, populate };
   };
 
   private resolveRef = (ref: string): string => {
@@ -314,33 +420,62 @@ class Client {
   // #region AIGENERATED
   public async getSingle<S extends Schema>(
     pluralID: string,
-    options: EntityRequest<{
-      schema: S;
-      populate?: any;
-    }>,
+    options: EntityRequest<
+      {
+        schema: S;
+        onParseError: "skip";
+        fields?: boolean;
+        populate?: any;
+      } & ReadRequest
+    >,
+  ): Promise<{ data: InferSchemaWithDefaults<S> | null; meta: any }>;
+  public async getSingle<S extends Schema>(
+    pluralID: string,
+    options: EntityRequest<
+      {
+        schema: S;
+        onParseError?: "throw";
+        fields?: boolean;
+        populate?: any;
+      } & ReadRequest
+    >,
   ): Promise<{ data: InferSchemaWithDefaults<S>; meta: any }>;
   public async getSingle(
     pluralID: string,
-    options: EntityRequest<{
-      populate?: any;
-    }>,
+    options: EntityRequest<
+      {
+        populate?: any;
+      } & ReadRequest
+    >,
   ): Promise<{ data: any; meta: any }>;
   public async getSingle<S extends Schema | undefined>(
     pluralID: string,
     {
-      params = {},
+      params,
       headers = {},
+      locale,
+      status,
+      onParseError = "throw",
+      fields = true,
       ...options
-    }: EntityRequest<{
-      schema?: S;
-      populate?: any;
-    }> = {},
+    }: EntityRequest<
+      {
+        schema?: S;
+        onParseError?: ParseErrorMode;
+        fields?: boolean;
+        populate?: any;
+      } & ReadRequest
+    > = {},
   ): Promise<{ data: S extends Schema ? InferSchemaWithDefaults<S> : any; meta: any }> {
     try {
+      const requestParams = this.buildParams(params, { locale, status });
+
       if ("schema" in options) {
         const { schema } = options;
         if (schema) {
-          params.populate = this.populateFromSchema(schema);
+          const query = this.queryFromSchema(schema, { restrict: fields });
+          requestParams.populate = query.populate;
+          if (query.fields.length) requestParams.fields = query.fields;
           if ("populate" in options) {
             if (!!options.populate)
               console.warn(
@@ -349,13 +484,13 @@ class Client {
           }
         }
       } else if ("populate" in options) {
-        params.populate = options.populate;
+        requestParams.populate = options.populate;
       }
 
       const requestURL = Client.getRequestURL({
         origin: this.origin,
         pathname: join(this.pathname, pluralID),
-        params,
+        params: requestParams,
       });
 
       const response = await fetch(requestURL, {
@@ -370,9 +505,9 @@ class Client {
       if (!response.ok) {
         throw createSimpleException({
           code: response.status,
-          message: response.statusText,
+          message: await Client.messageFrom(response),
           type: "error",
-          source: "strapi-utils/client.ts",
+          source: "simple-strapi/client.ts",
         });
       }
 
@@ -385,14 +520,7 @@ class Client {
       if ("schema" in options) {
         const { schema: shape } = options;
         if (shape) {
-          const schema = z.object(schemaToParser(shape)).extend(defaultStrapiFields).loose();
-          const result = schema.safeParse(data);
-          if (!result.success) {
-            console.warn("⚠️ Single entity parsing error");
-            console.error("🚨 Error", result.error);
-            return { data: null as any, meta };
-          }
-          return { data: result.data as any, meta };
+          return { data: this.parseEntity(shape, data, { pluralID, onParseError }), meta } as any;
         }
       }
 
@@ -405,62 +533,80 @@ class Client {
 
   public async getCollection<S extends Schema>(
     pluralID: string,
-    options: EntityRequest<{
-      schema: S;
-      pagination?: false | { page?: number; pageSize?: number };
-      sort?: string | string[];
-      populate?: any;
-      filters?: Record<string, any>;
-    }>,
+    options: EntityRequest<
+      {
+        schema: S;
+        onParseError?: ParseErrorMode;
+        fields?: boolean;
+        pagination?: false | { page?: number; pageSize?: number };
+        sort?: string | string[];
+        populate?: any;
+        filters?: Record<string, any>;
+      } & ReadRequest
+    >,
   ): Promise<{ data: InferSchemaWithDefaults<S>[]; meta: any }>;
   public async getCollection(
     pluralID: string,
-    options: EntityRequest<{
-      pagination?: false | { page?: number; pageSize?: number };
-      sort?: string | string[];
-      populate?: any;
-      filters?: Record<string, any>;
-    }>,
+    options: EntityRequest<
+      {
+        pagination?: false | { page?: number; pageSize?: number };
+        sort?: string | string[];
+        populate?: any;
+        filters?: Record<string, any>;
+      } & ReadRequest
+    >,
   ): Promise<{ data: any[]; meta: any }>;
   public async getCollection<S extends Schema | undefined>(
     pluralID: string,
     {
-      params = {},
+      params,
       headers = {},
       pagination = { page: 1 },
+      locale,
+      status,
+      onParseError = "throw",
+      fields = true,
       ...options
-    }: EntityRequest<{
-      schema?: S;
-      pagination?: false | { page?: number; pageSize?: number };
-      sort?: string | string[];
-      populate?: any;
-      filters?: Record<string, any>;
-    }> = {},
+    }: EntityRequest<
+      {
+        schema?: S;
+        onParseError?: ParseErrorMode;
+        fields?: boolean;
+        pagination?: false | { page?: number; pageSize?: number };
+        sort?: string | string[];
+        populate?: any;
+        filters?: Record<string, any>;
+      } & ReadRequest
+    > = {},
   ): Promise<{ data: S extends Schema ? InferSchemaWithDefaults<S>[] : any[]; meta: any }> {
     try {
+      const requestParams = this.buildParams(params, { locale, status });
+
       if ("schema" in options) {
         const { schema } = options;
         if (schema) {
-          params.populate = this.populateFromSchema(schema);
+          const query = this.queryFromSchema(schema, { restrict: fields });
+          requestParams.populate = query.populate;
+          if (query.fields.length) requestParams.fields = query.fields;
           if ("populate" in options) {
             if (!!options.populate)
               console.warn(
-                "⚠️ Since you provided both the 'populate' adnd 'schema', the 'populate' parameter will be ignored.",
+                "⚠️ Since you provided both the 'populate' and 'schema', the 'populate' parameter will be ignored.",
               );
           }
         }
       } else if ("populate" in options) {
-        params.populate = options.populate;
+        requestParams.populate = options.populate;
       }
 
       if ("sort" in options) {
-        params.sort = options.sort;
+        requestParams.sort = options.sort;
       }
 
       const fetchPage = async (page: number = 1, acc: any[] = []) => {
-        params.pagination = { page, pageSize: 100 };
-        params.filters = options.filters;
-        if (pagination) params.pagination = { ...params.pagination, ...pagination };
+        requestParams.pagination = { page, pageSize: 100 };
+        requestParams.filters = options.filters;
+        if (pagination) requestParams.pagination = { ...requestParams.pagination, ...pagination };
 
         const requestURL = Client.getRequestURL({
           origin: this.origin,
@@ -469,7 +615,7 @@ class Client {
               !!entry ? [entry] : [],
             ),
           ),
-          params,
+          params: requestParams,
         });
 
         const response = await fetch(requestURL, {
@@ -484,9 +630,9 @@ class Client {
         if (!response.ok) {
           throw createSimpleException({
             code: response.status,
-            message: response.statusText,
+            message: await Client.messageFrom(response),
             type: "error",
-            source: "strapi-utils/client.ts",
+            source: "simple-strapi/client.ts",
           });
         }
 
@@ -513,15 +659,11 @@ class Client {
       if ("schema" in options) {
         const { schema: shape } = options;
         if (shape) {
-          const schema = z.object(schemaToParser(shape)).extend(defaultStrapiFields).loose();
           const parsedData: any[] = [];
           for (const entry of data) {
-            const result = schema.safeParse(entry);
-            if (result.success) {
-              parsedData.push(result.data);
-            } else {
-              console.warn("⚠️ Collection parsing error on entry", entry);
-              console.error("🚨 Error", result.error);
+            const parsed = this.parseEntity(shape, entry, { pluralID, onParseError });
+            if (parsed !== null) {
+              parsedData.push(parsed);
             }
           }
           return { data: parsedData, meta } as any;
@@ -562,17 +704,21 @@ class Client {
     method: "POST" | "PUT",
     path: string,
     payload: any,
-    { params = {}, headers = {}, ...options }: EntityRequest<{ schema?: any }> = {},
+    { params, headers = {}, ...options }: EntityRequest<{ schema?: any }> = {},
   ) {
     try {
+      const requestParams = this.buildParams(params);
+
       if ("schema" in options && options.schema) {
-        params.populate = this.populateFromSchema(options.schema);
+        const query = this.queryFromSchema(options.schema, { restrict: true });
+        requestParams.populate = query.populate;
+        if (query.fields.length) requestParams.fields = query.fields;
       }
 
       const requestURL = Client.getRequestURL({
         origin: this.origin,
         pathname: join(this.pathname, path),
-        params,
+        params: requestParams,
       });
 
       const response = await fetch(requestURL, {

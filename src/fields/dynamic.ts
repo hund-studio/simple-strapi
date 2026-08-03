@@ -1,5 +1,5 @@
-import { InferSchema, Schema } from "../client";
-import { schemaToParser } from "../utils/schema";
+import { InferSchema, Schema } from "../client.js";
+import { schemaToParser } from "../utils/schema.js";
 import z, { ZodType } from "zod";
 
 export type DynamicOptions = {

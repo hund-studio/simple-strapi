@@ -1,6 +1,6 @@
 import z, { ZodType } from "zod";
-import { InferSchema, InferSchemaWithDefaults, Schema } from "../client";
-import { schemaToParser } from "../utils/schema";
+import { InferSchema, InferSchemaWithDefaults, Schema } from "../client.js";
+import { schemaToParser } from "../utils/schema.js";
 
 /**
  * SINGLE

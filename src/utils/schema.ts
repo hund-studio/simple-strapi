@@ -1,14 +1,14 @@
-import { booleanSchema } from "../fields/boolean";
-import { dynamicSchema } from "../fields/dynamic";
-import { enumerationSchema } from "../fields/enumeration";
-import { mediaSingleSchema, mediaMultipleSchema } from "../fields/media";
-import { numberSchema } from "../fields/number";
-import { repeatableSchema, singleSchema } from "../fields/component";
-import { richTextBlocksSchema } from "../fields/richText";
-import { Schema } from "../client";
-import { textSchema } from "../fields/text";
+import { booleanSchema } from "../fields/boolean.js";
+import { dynamicSchema } from "../fields/dynamic.js";
+import { enumerationSchema } from "../fields/enumeration.js";
+import { mediaSingleSchema, mediaMultipleSchema } from "../fields/media.js";
+import { numberSchema } from "../fields/number.js";
+import { repeatableSchema, singleSchema } from "../fields/component.js";
+import { richTextBlocksSchema } from "../fields/richText.js";
+import { Schema } from "../client.js";
+import { textSchema } from "../fields/text.js";
 import z, { ZodType } from "zod";
-import { jsonSchema } from "../fields/json";
+import { jsonSchema } from "../fields/json.js";
 
 export const defaultStrapiFields = {
   id: z.number(),
