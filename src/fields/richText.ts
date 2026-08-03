@@ -59,9 +59,25 @@ const listBlock = z.object({
   children: z.array(listItemBlock),
 });
 
-export const zodRichTextBlocksSchema = z.array(z.union([paragraphBlock, headingBlock, listBlock]));
+/*
+ * Anche qui il tipo pubblico è scritto a mano e non dedotto: vedi la nota in
+ * `media.ts`. Un tipo dedotto da zod porta nel `.d.ts` riferimenti interni alla
+ * versione di zod usata in compilazione.
+ */
+export type RichTextBlock =
+  | { type: "paragraph"; children: ParagraphChild[] }
+  | { type: "heading"; level: number; children: ParagraphChild[] }
+  | {
+      type: "list";
+      format: "ordered" | "unordered";
+      children: { type: "list-item"; children: ParagraphChild[] }[];
+    };
 
-type ZodRichTextBlocksType = z.output<typeof zodRichTextBlocksSchema>;
+export const zodRichTextBlocksSchema: ZodType<RichTextBlock[]> = z.array(
+  z.union([paragraphBlock, headingBlock, listBlock]),
+);
+
+type ZodRichTextBlocksType = RichTextBlock[];
 export type RichTextBlocks = ZodRichTextBlocksType; // Public export
 
 export type RichTextBlocksOptions = {

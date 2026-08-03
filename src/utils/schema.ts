@@ -10,7 +10,12 @@ import { textSchema } from "../fields/text.js";
 import z, { ZodType } from "zod";
 import { jsonSchema } from "../fields/json.js";
 
-export const defaultStrapiFields = {
+/*
+ * Annotato esplicitamente, come tutto ciò che questo package espone: senza, il
+ * `.d.ts` porta `z.ZodISODateTime` e altri tipi interni di zod, che valgono solo per
+ * la versione contro cui la libreria è compilata.
+ */
+export const defaultStrapiFields: Record<string, ZodType> = {
   id: z.number(),
   documentId: z.string().optional(),
   createdAt: z.iso.datetime().optional(),
@@ -18,9 +23,22 @@ export const defaultStrapiFields = {
   publishedAt: z.iso.datetime().nullable().optional(),
 };
 
-export const defaultStrapiFieldsSchema = z.object(defaultStrapiFields);
+/**
+ * I campi che Strapi mette in ogni entità. Scritti a mano per la stessa ragione di
+ * `ZodMediaType`: è il tipo che finisce dentro `InferSchemaWithDefaults`, cioè nel
+ * ritorno di ogni lettura, e non deve dipendere dalla versione di zod del consumer.
+ */
+export interface StrapiDefaults {
+  id: number;
+  documentId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  publishedAt?: string | null;
+}
 
-export const schemaToParser = (schema: Schema) => {
+export const defaultStrapiFieldsSchema = z.object(defaultStrapiFields) as unknown as ZodType<StrapiDefaults>;
+
+export const schemaToParser = (schema: Schema): Record<string, ZodType> => {
   const shape: Record<string, ZodType> = {};
 
   for (const [key, field] of Object.entries(schema)) {

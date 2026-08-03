@@ -1,6 +1,52 @@
 import z, { ZodType } from "zod";
 
-export const zodMediaSchema = z.object({
+/**
+ * Un media della Media Library, **scritto a mano** e non dedotto dallo zod.
+ *
+ * Il tipo dedotto (`z.output<typeof zodMediaSchema>`) finisce nel `.d.ts` come una
+ * struttura enorme piena di riferimenti interni a zod — `z.core.$strip`,
+ * `z.ZodISODateTime` — che valgono solo per la versione di zod contro cui questa
+ * libreria è stata compilata. Un consumer che ne risolve un'altra si ritrova i tipi
+ * rotti, e con `skipLibCheck` attivo non lo scopre: gli arriva `any` senza un
+ * errore. È successo davvero, e costa una giornata a capirlo.
+ *
+ * Scritto a mano, il tipo pubblico è indipendente dalla versione di zod. Lo schema
+ * resta la fonte a runtime, e l'annotazione esplicita li tiene allineati: se la
+ * validazione e questa interfaccia divergono, non compila.
+ */
+export interface ZodMediaFormat {
+  name: string;
+  hash?: string;
+  ext?: string;
+  mime: string;
+  path?: string | null;
+  size: number;
+  url: string;
+  width: number;
+  height: number;
+}
+
+export interface ZodMediaType {
+  id: number;
+  name: string;
+  alternativeText: string | null;
+  caption: string | null;
+  width: number | null;
+  height: number | null;
+  formats?: Record<string, ZodMediaFormat> | null;
+  hash: string;
+  ext: string;
+  mime: string;
+  size: number;
+  url: string;
+  previewUrl: string | null;
+  provider: string;
+  provider_metadata: unknown;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const zodMediaSchema: ZodType<ZodMediaType> = z.object({
   id: z.number(),
   name: z.string(),
   alternativeText: z.string().nullable(),
@@ -35,8 +81,6 @@ export const zodMediaSchema = z.object({
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });
-
-export type ZodMediaType = z.output<typeof zodMediaSchema>;
 
 export type MediaSingleOptions = {
   // nullable?: boolean;

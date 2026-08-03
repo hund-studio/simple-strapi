@@ -30,7 +30,7 @@ async function safeResponseJson(response: Response): Promise<unknown> {
 }
 import z from "zod";
 import { DynamicField, DynamicOptions, InferDynamic } from "./fields/dynamic.js";
-import { defaultStrapiFields, defaultStrapiFieldsSchema, schemaToParser } from "./utils/schema.js";
+import { defaultStrapiFields, schemaToParser, type StrapiDefaults } from "./utils/schema.js";
 import {
   ComponentRepeatableField,
   ComponentRepeatableOptions,
@@ -150,8 +150,7 @@ export type InferSchema<S extends Schema> = {
                             : never;
 };
 
-export type InferSchemaWithDefaults<S extends Schema> = InferSchema<S> &
-  z.output<typeof defaultStrapiFieldsSchema>;
+export type InferSchemaWithDefaults<S extends Schema> = InferSchema<S> & StrapiDefaults;
 
 class Client {
   // #region STATIC
